@@ -1,0 +1,19 @@
+version: '3.3'
+
+services:
+  emqx:
+    image: emqx/emqx:5.8
+    container_name: deviceemu-emqx
+    ports:
+      - "1883:1883"              # MQTT
+      - "18083:18083"            # Dashboard(http://127.0.0.1:18083 默认 admin/public)
+    restart: unless-stopped
+
+  # FreeSWITCH 用 host 网络:SIP(5060)/RTP 端口全部直通 VM,无 NAT。
+  # 这是 Linux Docker 专属能力,也是这次选 VM 的核心收益之一。
+  freeswitch:
+    image: safarov/freeswitch      # 免 SignalWire token、自带 vanilla 配置(分机 1000-1019 / 密码 1234)
+    container_name: deviceemu-fs
+    network_mode: host
+    restart: unless-stopped
+    # 首次启动慢,等 1-2 分钟再 fs_cli

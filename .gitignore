@@ -1,0 +1,12 @@
+# 真实配置不进仓
+configs/config.yaml
+configs/*.local.yaml
+
+# 构建产物
+bin/
+deviceemu
+
+# IDE
+.idea/
+.vscode/
+*.swp

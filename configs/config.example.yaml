@@ -1,0 +1,20 @@
+# DeviceEmu 配置示例。
+device:
+  id: "device-001"                  # 设备唯一标识
+
+mqtt:
+  broker: "tcp://127.0.0.1:1883"    # 本地 EMQX(容器 bridge 映射端口)
+  username: "CHANGE_ME"             # EMQX 5.x 默认匿名,本地测试可留 CHANGE_ME
+  password: "CHANGE_ME"
+  keepalive_seconds: 30
+  telemetry_interval_seconds: 5     # 心跳/遥测上报间隔
+
+sip:
+  server: "127.0.0.1:5060"          # 本地 FreeSWITCH internal profile(host 网络)
+  username: "1001"                  # 测试分机号(FreeSWITCH vanilla 默认 1000-1019)
+  password: "CHANGE_ME"             # vanilla 默认是 1234,真实值进本地 config.yaml
+  domain: "127.0.0.1"
+  register_expiry_seconds: 60
+  local_host: "127.0.0.1"           # 本机 UA 对外宣告的 IP(VM 内回环即可)
+  local_port: 5066                  # 本机 UA 监听端口(避开 5060/5070)
+  callee: "sip:service@127.0.0.1:5070"   # Day3 被叫方(sipp UAS)
