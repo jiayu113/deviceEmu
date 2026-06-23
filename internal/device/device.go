@@ -9,6 +9,7 @@ import (
 
 	"github.com/jiayu113/deviceemu/internal/config"
 	"github.com/jiayu113/deviceemu/internal/transport/mqtt"
+	"github.com/jiayu113/deviceemu/internal/transport/sip"
 )
 
 // Device 是一个被仿真的智能终端,持有底层 transport,统一生命周期
@@ -16,6 +17,8 @@ type Device struct {
 	id       string
 	interval time.Duration
 	mqtt     *mqtt.Client
+	sip      *sip.Client
+	callee   string
 }
 
 // New 根据 config 构造 Device
@@ -28,10 +31,20 @@ func New(cfg *config.Config) (*Device, error) {
 		Keepalive: time.Duration(cfg.MQTT.KeepaliveSeconds) * time.Second,
 	})
 
+	s, err := sip.New(sip.Config{
+		Server: cfg.SIP.Server, Username: cfg.SIP.Username, Password: cfg.SIP.Password,
+		Domain: cfg.SIP.Domain, LocalHost: cfg.SIP.LocalHost, LocalPort: cfg.SIP.LocalPort,
+		Expiry: cfg.SIP.RegisterExpirySeconds,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("new sip client: %w", err)
+	}
 	return &Device{
 		id:       cfg.Device.ID,
 		interval: time.Duration(cfg.MQTT.TelemetryInterval) * time.Second,
 		mqtt:     m,
+		sip:      s,
+		callee:   cfg.SIP.Callee,
 	}, nil
 }
 
@@ -43,6 +56,9 @@ func (d *Device) Start(ctx context.Context) error {
 	cmdTopic := fmt.Sprintf("devices/%s/cmd", d.id)
 	if err := d.mqtt.Subscribe(cmdTopic, 1, d.handleCommand); err != nil {
 		return fmt.Errorf("mqtt subscribe: %w", err)
+	}
+	if err := d.sip.Register(ctx); err != nil {
+		return fmt.Errorf("sip register: %w", err)
 	}
 	log.Printf("[device %s] subscribed %s", d.id, cmdTopic)
 	go d.runTelemetry(ctx)
@@ -80,4 +96,5 @@ func (d *Device) handleCommand(_ string, payload []byte) {
 // Stop 优雅停机
 func (d *Device) Stop() {
 	d.mqtt.Disconnect()
+	d.sip.Close()
 }
