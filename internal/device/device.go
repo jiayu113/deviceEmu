@@ -88,9 +88,32 @@ func (d *Device) runTelemetry(ctx context.Context) {
 	}
 }
 
-// handleCommand 处理平台下发的命令
+// handleCommand:平台经 MQTT 下发命令 → 设备据此发起 SIP 呼叫
 func (d *Device) handleCommand(_ string, payload []byte) {
-	log.Printf("[device %s] cmd: %s", d.id, string(payload))
+	var cmd struct {
+		Action string `json:"action"`
+		Target string `json:"target"`
+	}
+	if err := json.Unmarshal(payload, &cmd); err != nil {
+		log.Printf("[device %s] bad cmd: %s", d.id, string(payload))
+		return
+	}
+	log.Printf("[device %s] cmd: action=%s target=%s", d.id, cmd.Action, cmd.Target)
+
+	switch cmd.Action {
+	case "call":
+		target := cmd.Target
+		if target == "" {
+			target = d.callee
+		}
+		go func() {
+			if err := d.sip.Call(context.Background(), target, 5*time.Second); err != nil {
+				log.Printf("[device %s] call failed: %v", d.id, err)
+			}
+		}()
+	default:
+		log.Printf("[device %s] unknown action: %s", d.id, cmd.Action)
+	}
 }
 
 // Stop 优雅停机
