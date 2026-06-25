@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"sync/atomic"
 	"time"
 
 	"github.com/emiago/sipgo"
@@ -34,11 +35,12 @@ type Config struct {
 
 // Client 是运行时的状态机
 type Client struct {
-	cfg     Config
-	ua      *sipgo.UserAgent
-	client  *sipgo.Client
-	server  *sipgo.Server
-	dialogs *sipgo.DialogClientCache
+	cfg        Config
+	ua         *sipgo.UserAgent
+	client     *sipgo.Client
+	server     *sipgo.Server
+	dialogs    *sipgo.DialogClientCache
+	registered atomic.Bool // 原子布尔值,供 Device 遥测安全读取
 }
 
 // New 构造 UA + server(监听端口)+ client。
@@ -204,11 +206,13 @@ func (c *Client) Call(ctx context.Context, target string, hold time.Duration) er
 	log.Printf("[sip] call established, holding %s", hold)
 
 	select {
-	case <-time.After(hold): // 模拟通话
-	case <-ctx.Done():
+	case <-time.After(hold):
+	case <-ctx.Done(): // hangup / 关机
 	}
-
-	if err := session.Bye(ctx); err != nil {
+	// 用新鲜 ctx 发 BYE:即便上面是被取消的,BYE 也得发出去,不然对端挂着
+	byeCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := session.Bye(byeCtx); err != nil {
 		return fmt.Errorf("bye: %w", err)
 	}
 	log.Printf("[sip] call ended (BYE sent)")

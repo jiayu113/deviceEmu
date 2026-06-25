@@ -18,6 +18,12 @@ type Options struct {
 	Username  string
 	Password  string
 	Keepalive time.Duration
+
+	// 遗嘱(LWT):连接异常断开时,broker 替设备发这条消息
+	WillTopic    string
+	WillPayload  []byte
+	WillQoS      byte
+	WillRetained bool
 }
 
 // Client 是对 paho 的薄封装,只向上暴露 Connect/Subscribe/Publish/Disconnect
@@ -38,6 +44,9 @@ func New(opts Options) *Client {
 		SetConnectRetry(true).
 		SetConnectTimeout(10 * time.Second)
 
+	if opts.WillTopic != "" {
+		pahoOpts.SetBinaryWill(opts.WillTopic, opts.WillPayload, opts.WillQoS, opts.WillRetained)
+	}
 	pahoOpts.OnConnect = func(_ paho.Client) {
 		log.Printf("[mqtt] %s connected", opts.ClientID)
 	}
@@ -69,8 +78,8 @@ func (c *Client) Subscribe(topic string, qos byte, handler MessageHandler) error
 }
 
 // Publish 发布一条消息
-func (c *Client) Publish(topic string, qos byte, payload []byte) error {
-	tok := c.cli.Publish(topic, qos, false, payload)
+func (c *Client) Publish(topic string, qos byte, payload []byte, retained bool) error {
+	tok := c.cli.Publish(topic, qos, retained, payload)
 	tok.Wait()
 	return tok.Error()
 }
