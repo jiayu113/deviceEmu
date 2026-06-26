@@ -21,25 +21,20 @@ func main() {
 		log.Fatalf("load config: %v", err)
 	}
 
-	dev, err := device.New(cfg)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGALRM)
+	defer stop()
+
+	fleet, err := device.NewFleet(device.BuildFleetConfigs(cfg))
 	if err != nil {
-		log.Fatalf("new device: %v", err)
+		log.Fatal(err)
+	}
+	if err := fleet.Start(ctx); err != nil {
+		fleet.Stop()
+		log.Fatal(err)
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	if err := dev.Start(ctx); err != nil {
-		log.Fatalf("start device: %v", err)
-	}
-	log.Printf("device %s started", cfg.Device.ID)
-
-	// 等待 SIGINT / SIGTERM,优雅退出
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-	<-sigCh
-	log.Println("shutting down...")
-	cancel()
-	dev.Stop()
-	log.Println("bye")
+	log.Printf("fleet running; press Ctrl-C to stop")
+	<-ctx.Done()
+	log.Printf("shutting down...")
+	fleet.Stop()
 }

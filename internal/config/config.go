@@ -10,12 +10,20 @@ import (
 // Config 对应 config.yaml 全量结构
 type Config struct {
 	Device DeviceConfig `yaml:"device"`
+	Fleet  FleetConfig  `yaml:"fleet"`
 	MQTT   MQTTConfig   `yaml:"mqtt"`
 	SIP    SIPConfig    `yaml:"sip"`
 }
 
 type DeviceConfig struct {
 	ID string `yaml:"id"`
+}
+
+type FleetConfig struct {
+	Count        int    `yaml:"count"`
+	IDPrefix     string `yaml:"id_prefix"`      // device-
+	SIPExtStart  int    `yaml:"sip_ext_start"`  // 1001
+	SIPPortStart int    `yaml:"sip_port_start"` // 5066
 }
 
 type MQTTConfig struct {
