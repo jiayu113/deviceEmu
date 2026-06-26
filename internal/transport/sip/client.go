@@ -199,7 +199,7 @@ func (c *Client) Call(ctx context.Context, target string, hold time.Duration) er
 		return fmt.Errorf("wait answer: %w", err)
 	}
 
-	// ⚠️ 收到 200 必须发 ACK,否则对端重传 200 然后超时挂断
+	// 收到 200 必须发 ACK,否则对端重传 200 然后超时挂断
 	if err := session.Ack(ctx); err != nil {
 		return fmt.Errorf("ack: %w", err)
 	}
@@ -209,7 +209,6 @@ func (c *Client) Call(ctx context.Context, target string, hold time.Duration) er
 	case <-time.After(hold):
 	case <-ctx.Done(): // hangup / 关机
 	}
-	// 用新鲜 ctx 发 BYE:即便上面是被取消的,BYE 也得发出去,不然对端挂着
 	byeCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := session.Bye(byeCtx); err != nil {

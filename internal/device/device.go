@@ -16,25 +16,6 @@ import (
 	"github.com/jiayu113/deviceemu/internal/transport/sip"
 )
 
-type command struct {
-	RequestID string `json:"request_id"`
-	Action    string `json:"action"`
-	Target    string `json:"target"`
-	Interval  int    `json:"interval_seconds"`
-	Duration  int    `json:"duration_seconds"`
-}
-
-func parseCommand(b []byte) (command, error) {
-	var c command
-	if err := json.Unmarshal(b, &c); err != nil {
-		return c, fmt.Errorf("invalid json")
-	}
-	if c.Action == "" {
-		return c, fmt.Errorf("missing action")
-	}
-	return c, nil
-}
-
 // Device 是一个被仿真的智能终端,持有底层 transport,统一生命周期
 type Device struct {
 	id       string
