@@ -20,7 +20,7 @@ sip:
   callee: "sip:service@127.0.0.1:5070"   # 被叫方(sipp UAS)
 
 # 可选:批量模式。count<=1 或不写 = 单设备(用上面的 device/sip)
-  fleet:
+fleet:
   count: 0
   id_prefix: "device-"
   sip_ext_start: 1001
