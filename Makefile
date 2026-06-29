@@ -8,8 +8,8 @@ test:
 vet:
 	go vet ./...
 up:
-	docker compose -f deploy/docker-compose.yaml up -d
+	docker-compose -f deploy/docker-compose.yaml up -d
 down:
-	docker compose -f deploy/docker-compose.yaml down
+	docker-compose -f deploy/docker-compose.yaml down
 clean:
 	rm -rf bin/

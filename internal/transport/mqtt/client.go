@@ -6,6 +6,7 @@ import (
 	"time"
 
 	paho "github.com/eclipse/paho.mqtt.golang"
+	"github.com/jiayu113/deviceemu/internal/metrics"
 )
 
 // MessageHandler 是上层处理收到消息的回调
@@ -53,6 +54,10 @@ func New(opts Options) *Client {
 	pahoOpts.OnConnectionLost = func(_ paho.Client, err error) {
 		log.Printf("[mqtt] %s connection lost: %v", opts.ClientID, err)
 	}
+	// 重连
+	pahoOpts.SetReconnectingHandler(func(_ paho.Client, _ *paho.ClientOptions) {
+		metrics.MQTTReconnects.Inc()
+	})
 
 	return &Client{
 		cli: paho.NewClient(pahoOpts), clientID: opts.ClientID,

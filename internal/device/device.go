@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/jiayu113/deviceemu/internal/config"
+	"github.com/jiayu113/deviceemu/internal/metrics"
 	"github.com/jiayu113/deviceemu/internal/transport/mqtt"
 	"github.com/jiayu113/deviceemu/internal/transport/sip"
 )
@@ -88,6 +89,7 @@ func (d *Device) Start(ctx context.Context) error {
 		return fmt.Errorf("mqtt connect: %w", err)
 	}
 	d.publishStatus("online", "") // 覆盖遗嘱
+	metrics.DevicesOnline.Inc()
 
 	cmdTopic := fmt.Sprintf("devices/%s/cmd", d.id)
 	if err := d.mqtt.Subscribe(cmdTopic, 1, d.handleCommand); err != nil {
@@ -104,6 +106,7 @@ func (d *Device) Start(ctx context.Context) error {
 // Stop 优雅停机:主动宣告 offline,再断 MQTT / 关 SIP
 func (d *Device) Stop() {
 	d.publishStatus("offline", "shutdown")
+	metrics.DevicesOnline.Dec()
 	d.mqtt.Disconnect()
 	d.sip.Close()
 }
@@ -145,8 +148,11 @@ func (d *Device) runTelemetry(ctx context.Context) {
 		}
 		payload, _ := json.Marshal(tm)
 		if err := d.mqtt.Publish(topic, 1, payload, false); err != nil {
+			metrics.TelemetryErrors.Inc()
 			log.Printf("[device %s] publish telemetry: %v", d.id, err)
+			return
 		}
+		metrics.TelemetryPublished.Inc()
 	}
 
 	walk := func() { // 有界随机游走:在上次值附近小步漂移
@@ -176,12 +182,27 @@ func (d *Device) runTelemetry(ctx context.Context) {
 
 // handleCommand:平台经 MQTT 下发命令,设备据此动作并回 ack
 func (d *Device) handleCommand(_ string, payload []byte) {
+	start := time.Now()
 	cmd, err := parseCommand(payload)
+
+	// 用 defer 统一记录处理耗时
+	defer func() {
+		action := cmd.Action
+		if action == "" {
+			action = "unknown" // 保护机制：如果连动作名字都没解出来，不能填空，填 unknown
+		}
+		// 算从 start 到现在花了几秒，时间分布直方图里
+		metrics.CommandLatency.WithLabelValues(action).Observe(time.Since(start).Seconds())
+	}()
+
 	if err != nil {
+		// JSON 解析失败了，根本不知道是个啥命令
+		metrics.CommandsReceived.WithLabelValues("unknown", "err").Inc()
 		log.Printf("[device %s] reject cmd: %v: %s", d.id, err, string(payload))
 		d.ack(cmd.RequestID, cmd.Action, false, err.Error())
 		return
 	}
+
 	log.Printf("[device %s] cmd: action=%s", d.id, cmd.Action)
 
 	switch cmd.Action {
@@ -191,6 +212,7 @@ func (d *Device) handleCommand(_ string, payload []byte) {
 			target = d.callee
 		}
 		go d.doCall(target)
+		metrics.CommandsReceived.WithLabelValues(cmd.Action, "ok").Inc()
 		d.ack(cmd.RequestID, cmd.Action, true, "")
 
 	case "hangup":
@@ -199,8 +221,10 @@ func (d *Device) handleCommand(_ string, payload []byte) {
 		d.mu.Unlock()
 		if cancel != nil {
 			cancel() // Call 内部 select 命中 ctx.Done() → 提前 BYE
+			metrics.CommandsReceived.WithLabelValues(cmd.Action, "ok").Inc()
 			d.ack(cmd.RequestID, cmd.Action, true, "")
 		} else {
+			metrics.CommandsReceived.WithLabelValues(cmd.Action, "err").Inc()
 			d.ack(cmd.RequestID, cmd.Action, false, "no active call")
 		}
 
@@ -209,17 +233,21 @@ func (d *Device) handleCommand(_ string, payload []byte) {
 		case d.publishNow <- struct{}{}:
 		default:
 		}
+		metrics.CommandsReceived.WithLabelValues(cmd.Action, "ok").Inc()
 		d.ack(cmd.RequestID, cmd.Action, true, "")
 
 	case "set_telemetry_interval":
 		if cmd.Interval <= 0 {
+			metrics.CommandsReceived.WithLabelValues(cmd.Action, "err").Inc()
 			d.ack(cmd.RequestID, cmd.Action, false, "interval_seconds must be > 0")
+
 			return
 		}
 		select {
 		case d.reload <- time.Duration(cmd.Interval) * time.Second:
 		default:
 		}
+		metrics.CommandsReceived.WithLabelValues(cmd.Action, "ok").Inc()
 		d.ack(cmd.RequestID, cmd.Action, true, "")
 
 	case "simulate_fault":
@@ -229,10 +257,12 @@ func (d *Device) handleCommand(_ string, payload []byte) {
 		}
 		d.faulty.Store(true)
 		time.AfterFunc(time.Duration(dur)*time.Second, func() { d.faulty.Store(false) })
+		metrics.CommandsReceived.WithLabelValues(cmd.Action, "ok").Inc()
 		d.ack(cmd.RequestID, cmd.Action, true, fmt.Sprintf("faulty for %ds", dur))
 
 	default:
 		log.Printf("[device %s] unknown action: %s", d.id, cmd.Action)
+		metrics.CommandsReceived.WithLabelValues(cmd.Action, "err").Inc()
 		d.ack(cmd.RequestID, cmd.Action, false, "unknown action")
 	}
 }
@@ -250,10 +280,14 @@ func (d *Device) doCall(target string) {
 		d.mu.Unlock()
 	}()
 
+	start := time.Now()
 	if err := d.sip.Call(ctx, target, 5*time.Second); err != nil {
+		metrics.CallsTotal.WithLabelValues("fail").Inc()
 		log.Printf("[device %s] call failed: %v", d.id, err)
 		return
 	}
+	metrics.CallsTotal.WithLabelValues("ok").Inc()
+	metrics.CallDuration.Observe(time.Since(start).Seconds())
 	d.callCount.Add(1)
 	d.lastCallUnix.Store(time.Now().Unix())
 }

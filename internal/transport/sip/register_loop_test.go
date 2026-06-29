@@ -5,6 +5,7 @@ import (
 	"time"
 )
 
+// 测试碰壁退避时间
 func TestBackoffDelay(t *testing.T) {
 	base, max := time.Second, 30*time.Second
 	cases := []struct {
@@ -25,6 +26,7 @@ func TestBackoffDelay(t *testing.T) {
 	}
 }
 
+// 测试提前续签时间
 func TestRenewInterval(t *testing.T) {
 	if got := renewInterval(60); got != 45*time.Second {
 		t.Fatalf("renew(60)=%s want 45s", got)

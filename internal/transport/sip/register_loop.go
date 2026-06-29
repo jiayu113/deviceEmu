@@ -5,6 +5,8 @@ import (
 	"log"
 	"math/rand"
 	"time"
+
+	"github.com/jiayu113/deviceemu/internal/metrics"
 )
 
 // RegisterLoop 维持注册在线,直到 ctx 取消:
@@ -20,22 +22,37 @@ func (c *Client) RegisterLoop(ctx context.Context) {
 	)
 	attempt := 0
 	for {
+		// 每次尝试(含首注册/重试/续订)
+		metrics.SIPRegisterAttempts.Inc()
 		if err := c.Register(ctx); err != nil {
-			c.registered.Store(false)
+			// 注册失败
+			metrics.SIPRegisterFailures.Inc()
+			if c.registered.Swap(false) {
+				metrics.SIPRegistered.Dec()
+			}
 			attempt++
 			d := backoffDelay(attempt, baseDelay, maxDelay)
 			log.Printf("[sip] %s register failed (attempt %d): %v; retry in %s",
 				c.cfg.Username, attempt, err, d.Round(time.Millisecond))
 			if !sleepCtx(ctx, d) {
+				if c.registered.Swap(false) {
+					metrics.SIPRegistered.Dec()
+				}
 				return
 			}
 			continue
 		}
-		c.registered.Store(true)
+		// 注册成功
+		if !c.registered.Swap(true) {
+			metrics.SIPRegistered.Inc()
+		}
 		attempt = 0
 		renew := renewInterval(c.cfg.Expiry)
 		log.Printf("[sip] %s registered; renew in %s", c.cfg.Username, renew)
 		if !sleepCtx(ctx, renew) {
+			if c.registered.Swap(false) {
+				metrics.SIPRegistered.Dec()
+			}
 			return
 		}
 	}

@@ -1,0 +1,20 @@
+{
+  "title": "DeviceEmu Fleet",
+  "schemaVersion": 39,
+  "time": { "from": "now-15m", "to": "now" },
+  "refresh": "5s",
+  "panels": [
+    { "type": "stat", "title": "在线设备", "gridPos": {"h":4,"w":6,"x":0,"y":0},
+      "targets": [{ "expr": "deviceemu_devices_online" }] },
+    { "type": "stat", "title": "SIP 注册数", "gridPos": {"h":4,"w":6,"x":6,"y":0},
+      "targets": [{ "expr": "deviceemu_sip_registered_devices" }] },
+    { "type": "stat", "title": "goroutines", "gridPos": {"h":4,"w":6,"x":12,"y":0},
+      "targets": [{ "expr": "go_goroutines" }] },
+    { "type": "timeseries", "title": "遥测发布速率/s", "gridPos": {"h":8,"w":12,"x":0,"y":4},
+      "targets": [{ "expr": "rate(deviceemu_telemetry_published_total[1m])" }] },
+    { "type": "timeseries", "title": "故障设备(按类型)", "gridPos": {"h":8,"w":12,"x":12,"y":4},
+      "targets": [{ "expr": "deviceemu_devices_faulty" , "legendFormat": "{{kind}}"}] },
+    { "type": "timeseries", "title": "命令处理 p95(按动作)", "gridPos": {"h":8,"w":24,"x":0,"y":12},
+      "targets": [{ "expr": "histogram_quantile(0.95, sum by (le,action) (rate(deviceemu_command_handle_seconds_bucket[5m])))", "legendFormat": "{{action}}" }] }
+  ]
+}
