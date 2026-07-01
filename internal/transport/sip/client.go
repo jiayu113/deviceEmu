@@ -56,6 +56,15 @@ func New(cfg Config) (*Client, error) {
 		return nil, fmt.Errorf("new server: %w", err)
 	}
 
+	// 对 FreeSWITCH 注册成功后主动推送的 NOTIFY
+	// 直接回 200 OK,不做业务处理——避免命中 sipgo 默认的 "handler not found" WARN 日志
+	srv.OnRequest(sip.NOTIFY, func(req *sip.Request, tx sip.ServerTransaction) {
+		res := sip.NewResponseFromRequest(req, sip.StatusOK, "OK", nil)
+		if err := tx.Respond(res); err != nil {
+			log.Printf("[sip] respond to NOTIFY: %v", err)
+		}
+	})
+
 	// 同步绑定本地监听端口:立刻完成 bind。
 	// 绑 0.0.0.0 而非具体 IP,可避开「IP 不在网卡上 → cannot assign requested address」。
 	listenAddr := fmt.Sprintf("0.0.0.0:%d", cfg.LocalPort)

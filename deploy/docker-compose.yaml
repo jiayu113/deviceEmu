@@ -12,7 +12,7 @@ services:
   # FreeSWITCH 用 host 网络:SIP(5060)/RTP 端口全部直通 VM,无 NAT。
   # 这是 Linux Docker 专属能力,也是这次选 VM 的核心收益之一。
   freeswitch:
-    image: safarov/freeswitch      # 免 SignalWire token、自带 vanilla 配置(分机 1000-1019 / 密码 1234)
+    build: ./freeswitch     
     container_name: deviceemu-fs
     network_mode: host
     restart: unless-stopped
@@ -37,5 +37,7 @@ services:
     volumes:
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
       - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    extra_hosts:
+      - "prometheus:192.168.1.10"
     depends_on: [prometheus]
     restart: unless-stopped

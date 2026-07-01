@@ -12,7 +12,7 @@ mqtt:
 sip:
   server: "127.0.0.1:5060"          # 本地 FreeSWITCH internal profile(host 网络)
   username: "1001"                  # 测试分机号(FreeSWITCH vanilla 默认 1000-1019)
-  password: "CHANGE_ME"             # vanilla 默认是 1234,真实值进本地 config.yaml
+  password: "CHANGE_ME"             
   domain: "127.0.0.1"
   register_expiry_seconds: 60
   local_host: "127.0.0.1"           # 本机 UA 对外宣告的 IP(VM 内回环即可)

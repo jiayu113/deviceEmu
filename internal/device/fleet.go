@@ -49,9 +49,12 @@ func NewFleet(cfgs []*config.Config) (*Fleet, error) {
 }
 
 func (f *Fleet) Start(ctx context.Context) error {
-	for _, d := range f.devices {
+	for i, d := range f.devices {
 		if err := d.Start(ctx); err != nil {
 			return fmt.Errorf("start device %s: %w", d.id, err)
+		}
+		if i > 0 {
+			time.Sleep(20 * time.Millisecond) // 简单错峰,避免全部挤在同一瞬间
 		}
 	}
 	log.Printf("[fleet] %d devices started", len(f.devices))
