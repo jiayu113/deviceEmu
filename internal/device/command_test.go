@@ -29,3 +29,13 @@ func TestParseCommand(t *testing.T) {
 		})
 	}
 }
+
+func TestParseCommandWithFault(t *testing.T) {
+	c, err := parseCommand([]byte(`{"action":"simulate_fault","fault":"sip_drop","duration_seconds":20}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Fault != FaultSIPDrop || c.Duration != 20 {
+		t.Fatalf("got fault=%s dur=%d", c.Fault, c.Duration)
+	}
+}

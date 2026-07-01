@@ -11,12 +11,19 @@ import (
 type Config struct {
 	Device DeviceConfig `yaml:"device"`
 	Fleet  FleetConfig  `yaml:"fleet"`
+	Chaos  ChaosConfig  `yaml:"chaos"`
 	MQTT   MQTTConfig   `yaml:"mqtt"`
 	SIP    SIPConfig    `yaml:"sip"`
 }
 
 type DeviceConfig struct {
 	ID string `yaml:"id"`
+}
+
+type ChaosConfig struct {
+	Enabled        bool `yaml:"enabled"`
+	IntervalSecond int  `yaml:"interval_seconds"` // 每隔多久注入一次
+	FaultSeconds   int  `yaml:"fault_seconds"`    // 每次故障持续
 }
 
 type FleetConfig struct {

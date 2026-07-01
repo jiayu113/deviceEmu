@@ -60,6 +60,7 @@
 | `target`           | string   | `call` | SIP 呼叫目标 |
 | `interval_seconds` | int(秒)  | `set_telemetry_interval` | 新的遥测上报间隔 |
 | `duration_seconds` | int(秒)  | `simulate_fault` | 故障注入持续时长 |
+| `fault` | string  | `simulate_fault` | 故障类型(如 cpu_spike, sip_drop 等) |
 
 **解析规则**:
 
@@ -75,7 +76,7 @@
 | `hangup`                 | —                  | — | — | 取消当前通话的 ctx → 提前发 BYE | 有通话 `ok:true`;**无通话** `ok:false, error:"no active call"` |
 | `report_now`             | —                  | — | — | 触发一次立即遥测上报(非阻塞) | `ok:true` |
 | `set_telemetry_interval` | `interval_seconds` | 是 | — | 动态重置遥测 ticker | `>0` → `ok:true`;**`≤0`** → `ok:false, error:"interval_seconds must be > 0"` |
-| `simulate_fault`         | `duration_seconds` | 否 | `30` | 注入亚健康:`sip_registered` 置 false + `cpu` 飙到 95~100,到点自动恢复 | `ok:true`,且 `error` 字段回带提示 `"faulty for {N}s"` |
+| `simulate_fault`         | `fault, duration_seconds` | 否 | `fault: cpu_spike, duration: 30` | 注入指定故障，到点自动恢复 | `ok:true`,且 `error` 字段回带提示 `"faulty for {N}s"` |
 
 > `report_now` / `set_telemetry_interval` 经一个**缓冲 1 + 非阻塞**的 channel 投递给遥测 goroutine(绝不卡住 MQTT 回调)。极端并发下若上一条还没被消费,新请求可能被合并/丢弃,但 ack 仍回 `ok:true`——ack 表示"已受理",不保证那一拍一定独立触发。
 
@@ -99,6 +100,9 @@
 
 // simulate_fault:注入 60 秒亚健康(留空则默认 30 秒)
 { "request_id": "req-6", "action": "simulate_fault", "duration_seconds": 60 }
+
+// simulate_fault:注入 sip_drop 故障 50 秒
+{ "request_id": "req-7", "action": "simulate_fault", "fault": "sip_drop", "duration_seconds": 50 }
 ```
 
 ---

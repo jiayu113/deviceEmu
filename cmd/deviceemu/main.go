@@ -49,6 +49,8 @@ func main() {
 		log.Fatal(err)
 	}
 
+	fleet.StartChaos(ctx, cfg.Chaos)
+
 	log.Printf("fleet running; press Ctrl-C to stop")
 	<-ctx.Done()
 	log.Printf("shutting down...")

@@ -30,7 +30,7 @@ type Device struct {
 	// 运行时状态(遥测 goroutine 与命令 goroutine 并发访问,用原子)
 	callCount    atomic.Int64
 	lastCallUnix atomic.Int64
-	faulty       atomic.Bool
+	faults       *faultState
 
 	// 与遥测循环通信(缓冲 1 + 非阻塞发送,绝不卡 MQTT 回调)
 	reload     chan time.Duration
@@ -79,6 +79,7 @@ func New(cfg *config.Config) (*Device, error) {
 		callee:     cfg.SIP.Callee,
 		reload:     make(chan time.Duration, 1),
 		publishNow: make(chan struct{}, 1),
+		faults:     newFaultState(),
 	}, nil
 }
 
@@ -111,6 +112,15 @@ func (d *Device) Stop() {
 	d.sip.Close()
 }
 
+// injectFault 注入有时限故障并维护指标
+func (d *Device) injectFault(k FaultKind, dur time.Duration) {
+	newly := d.faults.inject(k, dur)
+	metrics.FaultsInjected.WithLabelValues(string(k)).Inc() // 每次注入都计
+	if newly {
+		metrics.DevicesFaulty.WithLabelValues(string(k)).Inc() // 仅"从无到有"时 +1
+	}
+}
+
 func (d *Device) publishStatus(status, reason string) {
 	topic := fmt.Sprintf("devices/%s/status", d.id)
 	payload, _ := json.Marshal(statusMsg{DeviceID: d.id, Status: status, Reason: reason, Ts: time.Now().Unix()})
@@ -133,8 +143,10 @@ func (d *Device) runTelemetry(ctx context.Context) {
 		seq++
 		reg := d.sip.Registered()
 		c := cpu
-		if d.faulty.Load() { // 故障注入:cpu 飙高 + 上报失联
+		if d.faults.has(FaultCPUSpike) {
 			c = 95 + rand.Float64()*5
+		}
+		if d.faults.has(FaultSIPDrop) {
 			reg = false
 		}
 		tm := Telemetry{
@@ -167,11 +179,17 @@ func (d *Device) runTelemetry(ctx context.Context) {
 			log.Printf("[device %s] telemetry loop stopped", d.id)
 			return
 		case <-t.C:
+			for _, k := range d.faults.sweep() {
+				metrics.DevicesFaulty.WithLabelValues(string(k)).Dec()
+			}
 			walk()
+			if d.faults.has(FaultTelemetryStall) {
+				continue
+			}
 			publish()
-		case <-d.publishNow: // report_now
+		case <-d.publishNow:
 			publish()
-		case ni := <-d.reload: // set_telemetry_interval
+		case ni := <-d.reload:
 			if ni > 0 {
 				t.Reset(ni)
 				log.Printf("[device %s] telemetry interval -> %s", d.id, ni)
@@ -196,7 +214,7 @@ func (d *Device) handleCommand(_ string, payload []byte) {
 	}()
 
 	if err != nil {
-		// JSON 解析失败了，根本不知道是个啥命令
+		// JSON 解析失败了，不知道是什么命令
 		metrics.CommandsReceived.WithLabelValues("unknown", "err").Inc()
 		log.Printf("[device %s] reject cmd: %v: %s", d.id, err, string(payload))
 		d.ack(cmd.RequestID, cmd.Action, false, err.Error())
@@ -204,6 +222,11 @@ func (d *Device) handleCommand(_ string, payload []byte) {
 	}
 
 	log.Printf("[device %s] cmd: action=%s", d.id, cmd.Action)
+
+	// Latency (卡顿) 注入
+	if d.faults.has(FaultLatency) {
+		time.Sleep(800 * time.Millisecond)
+	}
 
 	switch cmd.Action {
 	case "call":
@@ -255,10 +278,18 @@ func (d *Device) handleCommand(_ string, payload []byte) {
 		if dur <= 0 {
 			dur = 30
 		}
-		d.faulty.Store(true)
-		time.AfterFunc(time.Duration(dur)*time.Second, func() { d.faulty.Store(false) })
-		metrics.CommandsReceived.WithLabelValues(cmd.Action, "ok").Inc()
-		d.ack(cmd.RequestID, cmd.Action, true, fmt.Sprintf("faulty for %ds", dur))
+		kind := cmd.Fault
+		if kind == "" {
+			kind = FaultCPUSpike
+		}
+		if !ValidFault(kind) {
+			metrics.CommandsReceived.WithLabelValues("simulate_fault", "err").Inc()
+			d.ack(cmd.RequestID, cmd.Action, false, "unknown fault kind: "+string(kind))
+			return
+		}
+		d.injectFault(kind, time.Duration(dur)*time.Second)
+		metrics.CommandsReceived.WithLabelValues("simulate_fault", "ok").Inc()
+		d.ack(cmd.RequestID, cmd.Action, true, fmt.Sprintf("%s for %ds", kind, dur))
 
 	default:
 		log.Printf("[device %s] unknown action: %s", d.id, cmd.Action)
@@ -267,8 +298,13 @@ func (d *Device) handleCommand(_ string, payload []byte) {
 	}
 }
 
-// doCall 发起一次呼叫,登记可取消句柄(供 hangup),完成后更新统计
+// doCall 发起一次呼叫,登记可取消句柄,完成后更新统计
 func (d *Device) doCall(target string) {
+	if d.faults.has(FaultCallFail) { // 注入呼叫故障:直接失败,不真发起
+		metrics.CallsTotal.WithLabelValues("fail").Inc()
+		log.Printf("[device %s] call suppressed by fault injection", d.id)
+		return
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	d.mu.Lock()
 	d.cancelCall = cancel

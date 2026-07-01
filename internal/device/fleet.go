@@ -4,10 +4,14 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"math/rand/v2"
 	"sync"
+	"time"
 
 	"github.com/jiayu113/deviceemu/internal/config"
 )
+
+var allFaults = []FaultKind{FaultCPUSpike, FaultSIPDrop, FaultTelemetryStall, FaultCallFail, FaultLatency}
 
 // BuildFleetConfigs 把 base 配置按 fleet 段展开成 N 份
 func BuildFleetConfigs(base *config.Config) []*config.Config {
@@ -64,4 +68,35 @@ func (f *Fleet) Stop() {
 		}(d)
 	}
 	wg.Wait()
+}
+
+// StartChaos 周期随机注入,直到 ctx 取消。Enabled=false 时直接返回。
+func (f *Fleet) StartChaos(ctx context.Context, cfg config.ChaosConfig) {
+	if !cfg.Enabled || len(f.devices) == 0 {
+		return
+	}
+	iv := time.Duration(cfg.IntervalSecond) * time.Second
+	if iv <= 0 {
+		iv = 10 * time.Second
+	}
+	fd := time.Duration(cfg.FaultSeconds) * time.Second
+	if fd <= 0 {
+		fd = 20 * time.Second
+	}
+	go func() {
+		t := time.NewTicker(iv)
+		defer t.Stop()
+		log.Printf("[chaos] enabled: every %s inject random fault for %s", iv, fd)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+				dev := f.devices[rand.IntN(len(f.devices))]
+				k := allFaults[rand.IntN(len(allFaults))]
+				dev.injectFault(k, fd)
+				log.Printf("[chaos] injected %s into %s", k, dev.id)
+			}
+		}
+	}()
 }

@@ -25,3 +25,8 @@ fleet:
   id_prefix: "device-"
   sip_ext_start: 1001
   sip_port_start: 5066
+
+chaos:
+  enabled: false
+  interval_second: 10
+  fault_seconds: 20

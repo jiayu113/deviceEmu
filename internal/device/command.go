@@ -12,11 +12,12 @@ var (
 
 // command 是下行命令的线格式
 type command struct {
-	RequestID string `json:"request_id"`
-	Action    string `json:"action"`
-	Target    string `json:"target"`
-	Interval  int    `json:"interval_seconds"`
-	Duration  int    `json:"duration_seconds"`
+	RequestID string    `json:"request_id"`
+	Action    string    `json:"action"`
+	Target    string    `json:"target"`
+	Interval  int       `json:"interval_seconds"`
+	Duration  int       `json:"duration_seconds"`
+	Fault     FaultKind `json:"fault"`
 }
 
 // parseCommand 解析并做基本校验;返回错误说明拒绝原因
