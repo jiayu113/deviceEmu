@@ -31,6 +31,7 @@ type FleetConfig struct {
 	IDPrefix     string `yaml:"id_prefix"`      // device-
 	SIPExtStart  int    `yaml:"sip_ext_start"`  // 1001
 	SIPPortStart int    `yaml:"sip_port_start"` // 5066
+	RTPPortStart int    `yaml:"rtp_port_start"` // 16000,每设备一个 RTP 端口
 }
 
 type MQTTConfig struct {
@@ -49,6 +50,8 @@ type SIPConfig struct {
 	RegisterExpirySeconds int    `yaml:"register_expiry_seconds"`
 	LocalHost             string `yaml:"local_host"`
 	LocalPort             int    `yaml:"local_port"`
+	RTPPort               int    `yaml:"rtp_port"`       // 本设备 RTP 端口
+	AnswerEnabled         bool   `yaml:"answer_enabled"` // 是否开被叫应答
 	Callee                string `yaml:"callee"`
 }
 

@@ -65,7 +65,8 @@ func New(cfg *config.Config) (*Device, error) {
 	s, err := sip.New(sip.Config{
 		Server: cfg.SIP.Server, Username: cfg.SIP.Username, Password: cfg.SIP.Password,
 		Domain: cfg.SIP.Domain, LocalHost: cfg.SIP.LocalHost, LocalPort: cfg.SIP.LocalPort,
-		Expiry: cfg.SIP.RegisterExpirySeconds,
+		Expiry:  cfg.SIP.RegisterExpirySeconds,
+		RTPPort: cfg.SIP.RTPPort, AnswerEnabled: cfg.SIP.AnswerEnabled,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("new sip client: %w", err)

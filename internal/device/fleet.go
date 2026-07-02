@@ -26,6 +26,7 @@ func BuildFleetConfigs(base *config.Config) []*config.Config {
 		cp.Device.ID = fmt.Sprintf("%s%d", base.Fleet.IDPrefix, ext)
 		cp.SIP.Username = fmt.Sprintf("%d", ext)
 		cp.SIP.LocalPort = base.Fleet.SIPPortStart + i
+		cp.SIP.RTPPort = base.Fleet.RTPPortStart + i*2
 		out = append(out, &cp)
 	}
 	return out

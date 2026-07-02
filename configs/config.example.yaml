@@ -18,6 +18,8 @@ sip:
   local_host: "127.0.0.1"           # 本机 UA 对外宣告的 IP(VM 内回环即可)
   local_port: 5066                  # 本机 UA 监听端口(避开 5060/5070)
   callee: "sip:service@127.0.0.1:5070"   # 被叫方(sipp UAS)
+  rtp_port: 16000                   # 单设备 RTP 端口
+  answer_enabled: true              # 开启被叫应答
 
 # 可选:批量模式。count<=1 或不写 = 单设备(用上面的 device/sip)
 fleet:
@@ -25,6 +27,7 @@ fleet:
   id_prefix: "device-"
   sip_ext_start: 1001
   sip_port_start: 5066
+  rtp_port_start: 16000    # 步长 2
 
 chaos:
   enabled: false

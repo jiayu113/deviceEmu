@@ -24,13 +24,15 @@ const minimalSDP = "v=0\r\n" +
 
 // Config 是 sip.Client 所需参数(由上层从 config.SIPConfig 填)
 type Config struct {
-	Server    string // "192.168.1.10:5060"
-	Username  string
-	Password  string
-	Domain    string // "192.168.1.10":From 域 / realm 必须落在 FreeSWITCH 认的域上
-	LocalHost string // "192.168.1.10":Contact 对外宣告的 IP
-	LocalPort int    // 5066:本机 UA 监听端口(收响应 / NOTIFY / INVITE)
-	Expiry    int    // 注册有效期(秒)
+	Server        string // "192.168.1.10:5060"
+	Username      string
+	Password      string
+	Domain        string // "192.168.1.10":From 域 / realm 必须落在 FreeSWITCH 认的域上
+	LocalHost     string // "192.168.1.10":Contact 对外宣告的 IP
+	LocalPort     int    // 5066:本机 UA 监听端口(收响应 / NOTIFY / INVITE)
+	Expiry        int    // 注册有效期(秒)
+	RTPPort       int
+	AnswerEnabled bool
 }
 
 // Client 是运行时的状态机
@@ -40,7 +42,10 @@ type Client struct {
 	client     *sipgo.Client
 	server     *sipgo.Server
 	dialogs    *sipgo.DialogClientCache
-	registered atomic.Bool // 原子布尔值,供 Device 遥测安全读取
+	dialogSrv  *sipgo.DialogServerCache // 被叫对话
+	contact    sip.ContactHeader        // 主/被叫共用的 Contact
+	toneHz     float64                  // 本设备音调频率,可区分哪路
+	registered atomic.Bool              // 原子布尔值,供 Device 遥测安全读取
 }
 
 // New 构造 UA + server(监听端口)+ client。
@@ -94,10 +99,16 @@ func New(cfg Config) (*Client, error) {
 		Address: sip.Uri{User: cfg.Username, Host: cfg.LocalHost, Port: cfg.LocalPort},
 	}
 	dialogs := sipgo.NewDialogClientCache(cli, contact)
-
-	return &Client{
+	c := &Client{
 		cfg: cfg, ua: ua, client: cli, server: srv, dialogs: dialogs,
-	}, nil
+		contact: contact,
+		// 每设备一个可区分频率:350~1300Hz 之间,靠 RTP 端口散开
+		toneHz: 350 + float64(cfg.RTPPort%20)*48,
+	}
+	if cfg.AnswerEnabled {
+		c.enableAnswer()
+	}
+	return c, nil
 }
 
 // Register 执行 REGISTER:首发 → 收 401 → 带 digest 重发 → 期望 200
